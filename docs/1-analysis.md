@@ -1,3 +1,5 @@
+# Analysis
+
 Objectives:
 1. The system will display a menu on start up to the user to:
     - Start a new game
@@ -32,4 +34,4 @@ Objectives:
 
 12. The system will load the data from the save file if the user wants to carry on a previous game
 
-13. The system will delete the previous games save data when the program is closed after a game is won
+13. The system will make the user confirm they wish to overwrite their previous game's data if they start a new game while another one isnt finished (implies that if the game is finished the user will NOT be prompted when they start a new game)
