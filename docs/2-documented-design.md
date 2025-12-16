@@ -22,7 +22,7 @@ PROGRAM DESIGN TODO LIST:
 - MAIN Create a blank 8x8 target tracker
 - MAIN Create 8x8 grid for computer's boats
 
-- FUNCTION Initialse 8x8 grid
+- FUNCTION Initialise 8x8 grid
 - FUNCTION Place computer boats
   - Have the system wait for 1 second while it displays a loading animation (loading. -> loading.. -> loading...) to make computer selection feel realistic
 - FUNCTION Let user place boats
