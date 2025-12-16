@@ -23,6 +23,7 @@ PROGRAM DESIGN TODO LIST:
 - MAIN Create 8x8 grid for computer's boats
 
 - FUNCTION Initialise 8x8 grid
+x FUNCTION Display the grid
 - FUNCTION Place computer boats
   - Have the system wait for 1 second while it displays a loading animation (loading. -> loading.. -> loading...) to make computer selection feel realistic
 - FUNCTION Let user place boats
