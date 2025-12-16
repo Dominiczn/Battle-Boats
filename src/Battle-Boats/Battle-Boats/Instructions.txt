@@ -1,0 +1,7 @@
+Battle Boats is a turn-based strategy game where players eliminate their opponent's fleet of boats by ‘firing’ at a location on a grid in an attempt to sink them. The first player to sink all of their opponents’ battle boats is declared the winner.
+
+Each player has two eight by eight grids. One grid is used for their own battle boats and the other is used to record any hits or misses placed on their opponents. At the beginning of the game, players decide where they wish to place their fleet of five battle boats.
+
+During gameplay, players take turns to fire at a location on their opponent’s board. They do this by selecting the coordinates for their target using the highlighted cursor and their arrow keys. If a player hits their opponent's boat then this is recorded as a hit. If they miss then this is recorded as a miss.
+
+The game ends when a player's fleet of boats has been sunk. The winner is the player with boats remaining at the end of the game.
