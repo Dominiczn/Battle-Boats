@@ -5,8 +5,6 @@
 Key:
 - FUNCTION = this needs to be its own function (outside of Main)
 - MAIN - this can be done inside Main
-- "-" = this task needs to be done
-- "x" = this task has been completed
 
 PROGRAM DESIGN TODO LIST: 
 - FUNCTION Create menu with cursor
