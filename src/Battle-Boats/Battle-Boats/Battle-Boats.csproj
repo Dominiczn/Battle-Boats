@@ -8,4 +8,14 @@
     <Nullable>enable</Nullable>
   </PropertyGroup>
 
+  <ItemGroup>
+    <None Remove="GameInstructions.txt" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Content Include="GameInstructions.txt">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+  </ItemGroup>
+
 </Project>
