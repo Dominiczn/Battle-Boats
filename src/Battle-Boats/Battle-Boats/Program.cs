@@ -1,7 +1,8 @@
-﻿using System;
-using System.Reflection.Metadata;
+using System;
+using System.Formats.Tar;
+using System.Net;
+using System.Security.Cryptography.X509Certificates;
 using System.Text;
-using static System.Net.Mime.MediaTypeNames;
 
 namespace Battle_Boats
 {
@@ -56,6 +57,7 @@ namespace Battle_Boats
 
                 case 1:
                     //Resume game
+                    await ResumeGame(userGrid, computerGrid, targetGrid, rows, cols, random);
                     break;
 
                 case 2:
@@ -68,77 +70,219 @@ namespace Battle_Boats
             }
         }
 
+        static async Task ResumeGame (Cell[,] userGrid, Cell[,] computerGrid, char[,] targetGrid, int rows, int cols, Random random)
+        {
+            bool isUserTurn = true;
+            string text = string.Empty;
+            bool foundFile = false;
+            (userGrid, computerGrid, targetGrid, isUserTurn, text, foundFile) = LoadGameProgress(rows, cols);
+
+            if (foundFile == false)
+            {
+                Console.WriteLine(text);
+                PlaceUserBoats(userGrid, rows, cols, text);
+
+                await PlaceComputerBoats(computerGrid, rows, cols, random);
+                SaveGameProgress(userGrid, computerGrid, targetGrid, isUserTurn, text);
+            }
+
+            GameLoop(userGrid, computerGrid, targetGrid, rows, cols, isUserTurn, text, random);
+        }
+
         static async Task NewGame(Cell[,] userGrid, Cell[,] computerGrid, char[,] targetGrid, int rows, int cols, Random random)
         {
-            string text = "Select a cell to shoot at\n";
-            PlaceUserBoats(userGrid, rows, cols);
+            bool isUserTurn = true;
+            string text = string.Empty;
+            PlaceUserBoats(userGrid, rows, cols, text);
+
+            text = "Select a cell to shoot at\n";
 
             await PlaceComputerBoats(computerGrid, rows, cols, random);
-            SaveGameProgress(userGrid, computerGrid, targetGrid, rows, cols);
+            SaveGameProgress(userGrid, computerGrid, targetGrid, isUserTurn, text);
 
-            UserShootAtBoat(userGrid, computerGrid, targetGrid, rows, cols, ref text);
-
-            //UserShootAtBoat(userGrid, computerGrid, targetGrid, rows, cols, ref text);
-
+            GameLoop(userGrid, computerGrid, targetGrid, rows, cols, isUserTurn, text, random);
         }
 
-        static void ComputerShootAtBoat(Cell[,] userGrid, Cell[,] computerGrid, char[,] targetTracker, int rows, int cols, ref string text, Random random)
+        static string IsGameOver(Cell[,] userGrid, Cell[,] computerGrid, char[,] targetGrid, int rows, int cols)
         {
-            int randomRow = random.Next(rows);
-            int randomCol = random.Next(cols);
+            int userSunkCellCounter = 0;
+            int computerSunkCellCounter = 0;
 
-            if (userGrid[randomRow, randomCol].BoatId != -1)
+            for (int row = 0; row < rows; row++)
             {
-                int boatIdCounter = 0
-            } 
-        }
-
-        static void UserShootAtBoat(Cell[,] userGrid, Cell[,] computerGrid, char[,] targetTracker, int rows, int cols, ref string text)
-        {
-            (int rowSelection, int colSelection) coordinates = TraverseTargetGrid(targetTracker, computerGrid, userGrid, rows, cols, text);
-
-            int rowSelection = coordinates.rowSelection;
-            int colSelection = coordinates.colSelection;
-            
-            if (computerGrid[rowSelection, colSelection].BoatId != -1)
-            {
-                int boatIdCounter = 0;
-                computerGrid[rowSelection, colSelection].State = CellState.Hit;
-                
-                for (int row = 0; row < rows; row++)
+                for (int col = 0; col < cols; col++)
                 {
-                    for (int col = 0; col < cols; col++)
+                    if (userGrid[row, col].State == CellState.Sunk) { userSunkCellCounter++; }
+                    if (computerGrid[row, col].State == CellState.Sunk) {  computerSunkCellCounter++; }
+                }
+            }
+
+            if (userSunkCellCounter == 9) { return "Computer Won"; }
+            else if (computerSunkCellCounter == 9) { return "User Won"; }
+            
+            return "No";
+        }
+
+        static void GameLoop(Cell[,] userGrid, Cell[,] computerGrid, char[,] targetGrid, int rows, int cols, bool isUserTurn, string text, Random random)
+        {
+            string isGameOver = IsGameOver(userGrid, computerGrid, targetGrid, rows, cols);
+
+            int consecutiveHitCounter = 0;
+
+            int rowHit = random.Next(rows);
+            int colHit = random.Next(cols);
+
+            while (isGameOver == "No")
+            {
+                if (isUserTurn)
+                {
+                    UserTurn(userGrid, computerGrid, targetGrid, rows, cols, ref text);
+                    isUserTurn = false;
+                }
+
+                else
+                {
+                    ComputerTurn(userGrid, rows, cols, ref text, ref rowHit, ref colHit, ref consecutiveHitCounter, random);
+                    isUserTurn = true;
+                }
+
+                SaveGameProgress(userGrid, computerGrid, targetGrid, isUserTurn, text);
+                isGameOver = IsGameOver(userGrid, computerGrid, targetGrid, rows, cols);
+
+            }
+
+            if (isGameOver == "User Won")
+            {
+                Console.Clear();
+                Console.ForegroundColor = ConsoleColor.Green;
+                text = "You Won!";
+                TraverseTargetGrid(targetGrid, computerGrid, userGrid, rows, cols, text);
+            }
+
+            else if (isGameOver == "Computer Won")
+            {
+                Console.Clear();
+                Console.ForegroundColor = ConsoleColor.Red;
+                text = "You Lost!";
+                TraverseTargetGrid(targetGrid, computerGrid, userGrid, rows, cols, text);
+            }
+        }
+
+        static void ComputerTurn(Cell[,] userGrid, int rows, int cols, ref string text, ref int rowHit, ref int colHit, ref int consecutiveHitCounter, Random random)
+        {
+            while (userGrid[rowHit, colHit].State != CellState.Empty)
+            {
+                rowHit = random.Next(rows);
+                colHit = random.Next(cols);
+            }
+
+            Cell didComputerHit = CheckIfComputerHit(userGrid, rows, cols, ref text, rowHit, colHit, random);
+
+            if (didComputerHit.State == CellState.Hit)
+            {
+                (int rowHit, int colHit) coordinates = GenerateAdjacentCoordinate(userGrid, rowHit, colHit, rows, cols, consecutiveHitCounter, random);
+                rowHit = coordinates.rowHit;
+                colHit = coordinates.colHit;
+
+                consecutiveHitCounter++;
+            }
+
+            else if (didComputerHit.State == CellState.Miss)
+            {
+                if (consecutiveHitCounter == 2)
+                {
+                    int[] rowCoordinate = { -1, 0, 1, 0 }; //up, right, down, left
+                    int[] colCoordinate = { 0, 1, 0, -1 };
+
+                    int previousRow = 0;
+                    int previousCol = 0;
+
+                    for (int i = 0; i < 4; i++)
                     {
-                        if (computerGrid[row, col].BoatId == computerGrid[rowSelection, colSelection].BoatId && computerGrid[row, col].State == CellState.Hit)
+                        int nextRowDirection = rowCoordinate[i];
+                        int nextColDirection = colCoordinate[i];
+
+                        int nextRowCheck = rowHit + nextRowDirection;
+                        int nextColCheck = colHit + nextColDirection;
+                        if (nextRowCheck >= 0 && nextColCheck >= 0 && nextRowCheck < rows && nextColCheck < cols && userGrid[nextRowCheck, nextColCheck].State == CellState.Hit)
                         {
-                            boatIdCounter++;
+                            previousRow = nextRowDirection;
+                            previousCol = nextColDirection;
                         }
+                    }
+
+                    rowHit += (previousRow * 3);
+                    colHit += (previousCol * 3);
+                }
+
+
+                    consecutiveHitCounter = 0;
+ 
+            }
+        }
+
+        static (int nextRowHit, int nextColHit) GenerateAdjacentCoordinate(Cell[,] grid, int rowHit, int colHit, int rows, int cols, int consecutiveHitCounter, Random random)
+        {
+            int nextRowHit = 0;
+            int nextColHit = 0;
+
+            int[] rowCoordinate = { -1, 0, 1, 0 }; //up, right, down, left
+            int[] colCoordinate = { 0, 1, 0, -1 };
+
+            if (consecutiveHitCounter == 0) //if no previous boat has been hit before this current one, it will go in a random direction
+            {
+                int direction = random.Next(4);
+
+                nextRowHit = rowHit + rowCoordinate[direction];
+                nextColHit = colHit + colCoordinate[direction];
+
+                while (nextRowHit > rows - 1 || nextColHit > cols - 1 || nextRowHit < 0 || nextColHit < 0 || grid[nextRowHit, nextColHit].State != CellState.Empty)
+                {
+                    direction = random.Next(4);
+
+                    nextRowHit = rowHit + rowCoordinate[direction];
+                    nextColHit = colHit + colCoordinate[direction];
+                }
+
+
+                return (nextRowHit, nextColHit);
+            }
+
+            else if (consecutiveHitCounter > 0) //however if a boat has been hit before this one, it will only go in the same direction as the boat
+            {
+                int rowDirection = 0;
+                int colDirection = 0;
+
+                for (int i = 0; i < 4; i++)
+                {
+                    int nextRowDirection = rowCoordinate[i];
+                    int nextColDirection = colCoordinate[i]; 
+
+                    int nextRowCheck = rowHit + nextRowDirection;
+                    int nextColCheck = colHit + nextColDirection;
+                    if (nextRowCheck >= 0 && nextColCheck >= 0 && nextRowCheck < rows && nextColCheck < cols && grid[nextRowCheck, nextColCheck].State == CellState.Hit && grid[nextRowCheck, nextColCheck].BoatId == grid[rowHit, colHit].BoatId)
+                    {
+                        rowDirection = nextRowDirection;
+                        colDirection = nextColDirection;
                     }
                 }
 
+                nextRowHit = rowHit + (rowDirection * -1);
+                nextColHit = colHit + (colDirection * -1);
 
-                if (computerGrid[rowSelection, colSelection].Boat == BoatType.Destroyer && boatIdCounter == 1)
-                {
-                    computerGrid[rowSelection, colSelection].State = CellState.Sunk;
-                    text = "You sunk a ship!\n";
-                }
-
-                else { text = "You hit a ship!\n"; }
+                return (nextRowHit, nextColHit);
             }
 
-            else
-            {
-                computerGrid[rowSelection, colSelection].State = CellState.Miss;
-                text = "You missed!\n";
-            }
+            return (nextRowHit, nextColHit);
+
         }
 
-        /*
-        static void DidBoatGetHit(Cell[,] grid, int rowHit, int colHit, string sunkText, string hitText, string missText, int rows, int cols)
+        static Cell CheckIfComputerHit(Cell[,] grid, int rows, int cols, ref string text, int rowHit, int colHit, Random random)
         {
+
             if (grid[rowHit, colHit].BoatId != -1)
             {
-                int boatIdCounter = 0;
+                int hitBoatIdCounter = 0;
                 grid[rowHit, colHit].State = CellState.Hit;
 
                 for (int row = 0; row < rows; row++)
@@ -147,31 +291,135 @@ namespace Battle_Boats
                     {
                         if (grid[row, col].BoatId == grid[rowHit, colHit].BoatId && grid[row, col].State == CellState.Hit)
                         {
-                            boatIdCounter++;
+                            hitBoatIdCounter++;
                         }
                     }
                 }
 
-
-                if (grid[rowHit, colHit].Boat == BoatType.Destroyer && boatIdCounter == 1)
+                if (grid[rowHit, colHit].Boat == BoatType.Destroyer && hitBoatIdCounter == 1)
                 {
                     grid[rowHit, colHit].State = CellState.Sunk;
-                    sunkText = "You sunk a ship!\n";
+                    text = "They sunk your Destroyer!\n";
                 }
 
-                else { hitText = "You hit a ship!\n"; }
+                else if (grid[rowHit, colHit].Boat == BoatType.Submarine && hitBoatIdCounter == 2) { text = "They sunk your Submarine!\n";}
+
+                else if (grid[rowHit, colHit].Boat == BoatType.Carrier && hitBoatIdCounter == 3) { text = "They sunk your Carrier!\n";}
+
+                else { text = "They hit your ship!\n";}
+
+                for (int row = 0; row < rows; row++)
+                {
+                    for (int col = 0; col < cols; col++)
+                    {
+                        if (grid[row, col].BoatId == grid[rowHit, colHit].BoatId && grid[rowHit, colHit].Boat == BoatType.Submarine && hitBoatIdCounter == 2) { grid[row, col].State = CellState.Sunk; }
+
+                        else if (grid[row, col].BoatId == grid[rowHit, colHit].BoatId && grid[rowHit, colHit].Boat == BoatType.Carrier && hitBoatIdCounter == 3) { grid[row, col].State = CellState.Sunk; }
+                    }
+                }
             }
 
             else
             {
                 grid[rowHit, colHit].State = CellState.Miss;
-                missText = "You missed!\n";
+                text = "They missed!\n";
+            }
+
+            return grid[rowHit, colHit];
+        }
+
+        static void UserTurn(Cell[,] userGrid, Cell[,] computerGrid, char[,] targetTracker, int rows, int cols, ref string text)
+        {
+            (int rowSelection, int colSelection) coordinates = TraverseTargetGrid(targetTracker, computerGrid, userGrid, rows, cols, text);
+
+            int rowSelection = coordinates.rowSelection;
+            int colSelection = coordinates.colSelection;
+
+            targetTracker[rowSelection, colSelection] = CheckIfUserHit(userGrid, computerGrid, targetTracker, rows, cols, rowSelection, colSelection);
+
+            for (int row = 0; row < rows; row++)
+            {
+                for (int col = 0; col < cols; col++)
+                {
+                    if (computerGrid[rowSelection, colSelection].State == CellState.Sunk && computerGrid[row, col].BoatId == computerGrid[rowSelection, colSelection].BoatId)
+                    {
+                        targetTracker[row, col] = '#';
+                    }
+                }
             }
         }
 
-        */
+        static char CheckIfUserHit(Cell[,] userGrid, Cell[,] computerGrid, char[,] targetTracker, int rows, int cols, int rowSelection, int colSelection)
+        {
+            
+            if (computerGrid[rowSelection, colSelection].BoatId != -1)
+            {
+                int hitBoatIdCounter = 0;
+                computerGrid[rowSelection, colSelection].State = CellState.Hit;
+                
+                for (int row = 0; row < rows; row++)
+                {
+                    for (int col = 0; col < cols; col++)
+                    {
+                        if (computerGrid[row, col].BoatId == computerGrid[rowSelection, colSelection].BoatId && computerGrid[row, col].State == CellState.Hit)
+                        {
+                            hitBoatIdCounter++;
+                        }
+                    }
+                }
 
-        static void SaveGameProgress(Cell[,] userGrid, Cell[,] computerGrid, char[,] targetGrid, int rows, int cols)
+                
+                if (computerGrid[rowSelection, colSelection].Boat == BoatType.Destroyer && hitBoatIdCounter == 1)
+                {
+                    computerGrid[rowSelection, colSelection].State = CellState.Sunk;
+                    return '#'; //# means sunk
+                }
+
+                else if (computerGrid[rowSelection, colSelection].Boat == BoatType.Submarine && hitBoatIdCounter == 2)
+                {
+                    computerGrid[rowSelection, colSelection].State = CellState.Sunk;
+                    for (int row = 0; row < rows; row++)
+                    {
+                        for (int col = 0; col < cols; col++)
+                        {
+                            if (computerGrid[row, col].BoatId == computerGrid[rowSelection, colSelection].BoatId && computerGrid[row, col].State == CellState.Hit)
+                            {
+                                computerGrid[row, col].State = CellState.Sunk;
+                            }
+                        }
+                    }
+                    return '#';
+                }
+
+                else if (computerGrid[rowSelection, colSelection].Boat == BoatType.Carrier && hitBoatIdCounter == 3)
+                {
+                    computerGrid[rowSelection, colSelection].State = CellState.Sunk;
+                    for (int row = 0; row < rows; row++)
+                    {
+                        for (int col = 0; col < cols; col++)
+                        {
+                            if (computerGrid[row, col].BoatId == computerGrid[rowSelection, colSelection].BoatId && computerGrid[row, col].State == CellState.Hit)
+                            {
+                                computerGrid[row, col].State = CellState.Sunk;
+                            }
+                        }
+                    }
+                    return '#'; 
+                }
+
+                return 'H';
+
+                
+            }
+
+            else
+            {
+                computerGrid[rowSelection, colSelection].State = CellState.Miss;
+                return 'M';
+            }
+        }
+
+        static void SaveGameProgress(Cell[,] userGrid, Cell[,] computerGrid, char[,] targetGrid, bool isUsersTurn, string text)
         {
             string directoryLocation = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "BattleBoatsDominic");
             Directory.CreateDirectory(directoryLocation);
@@ -179,13 +427,15 @@ namespace Battle_Boats
 
             using (BinaryWriter writer = new BinaryWriter(File.Open(saveFileLocation, FileMode.Create, FileAccess.Write)))
             {
-                WriteCellGrid(writer, userGrid, rows, cols);
-                WriteCellGrid(writer, computerGrid, rows, cols);
-                WriteCharGrid(writer, targetGrid, rows, cols);
+                WriteCellGrid(writer, userGrid);
+                WriteCellGrid(writer, computerGrid);
+                WriteCharGrid(writer, targetGrid);
+                writer.Write(isUsersTurn);
+                writer.Write(text);
             }
         }
 
-        static (Cell[,] userGrid, Cell[,] computerGrid, char[,] targetGrid) LoadGameProgress()
+        static (Cell[,] userGrid, Cell[,] computerGrid, char[,] targetGrid, bool isUsersTurn, string text, bool foundFile) LoadGameProgress(int rows, int cols)
         {
             string directoryLocation = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "BattleBoatsDominic");
             Directory.CreateDirectory(directoryLocation);
@@ -193,7 +443,7 @@ namespace Battle_Boats
 
             if (!File.Exists(saveFileLocation))
             {
-                Console.WriteLine($"\nOops, your save data couldn't be found \nExpected at {saveFileLocation}");
+                return (InitialiseBoatGrid(rows, cols), InitialiseBoatGrid(rows, cols), InitialiseTargetGrid(rows, cols), true, "Couldn't find save file, starting new game.", false);
             }
 
             using (BinaryReader reader = new BinaryReader(File.Open(saveFileLocation, FileMode.Open, FileAccess.Read)))
@@ -201,13 +451,18 @@ namespace Battle_Boats
                 Cell[,] userGrid = ReadCellGrid(reader);
                 Cell[,] computerGrid = ReadCellGrid(reader);
                 char[,] targetGrid = ReadCharGrid(reader);
+                bool isUsersTurn = reader.ReadBoolean();
+                string text = reader.ReadString();
 
-                return (userGrid, computerGrid, targetGrid);
+                return (userGrid, computerGrid, targetGrid, isUsersTurn, text, true);
             }
         }
 
-        static void WriteCellGrid(BinaryWriter writer, Cell[,] grid, int rows, int cols)
+        static void WriteCellGrid(BinaryWriter writer, Cell[,] grid)
         {
+            int rows = grid.GetLength(0);
+            int cols = grid.GetLength(1);
+
             writer.Write(rows);
             writer.Write(cols);
 
@@ -218,7 +473,7 @@ namespace Battle_Boats
                     Cell cell = grid[row, col];
                     writer.Write((byte)cell.Boat);
                     writer.Write((byte)cell.State);
-                    writer.Write((byte)cell.BoatId);
+                    writer.Write((int)cell.BoatId);
                 }
             }
         }
@@ -237,7 +492,7 @@ namespace Battle_Boats
                 {
                     byte boat = reader.ReadByte();
                     byte state = reader.ReadByte();
-                    byte boatId = reader.ReadByte();
+                    int boatId = reader.ReadInt32();
 
                     grid[row, col] = new Cell
                     {
@@ -251,8 +506,12 @@ namespace Battle_Boats
             return grid;
         }
 
-        static void WriteCharGrid(BinaryWriter writer, char[,] grid, int rows, int cols)
+        static void WriteCharGrid(BinaryWriter writer, char[,] grid)
         {
+
+            int rows = grid.GetLength(0);
+            int cols = grid.GetLength(1);
+
             writer.Write(rows);
             writer.Write(cols);
 
@@ -317,35 +576,26 @@ namespace Battle_Boats
             return grid;
         }
 
-        static void DisplayTargetGrid(char[,] grid)
-        {
-            for (int row = 0; row < grid.GetLength(0); row++)
-            {
-                for (int col = 0; col < grid.GetLength(1); col++)
-                {
-                    Console.Write($"{grid[row, col]} ");
-                }
-                Console.WriteLine();
-            }
-        }
-
         static (int rowSelection, int colSelection) TraverseTargetGrid(char[,] targetGrid, Cell[,] computerGrid, Cell[,] userGrid, int rows, int cols, string text)
         {
             ConsoleKey key = ConsoleKey.None;
             int rowSelection = 0;
             int colSelection = 0;
 
+            (rowSelection, colSelection) = GoToNextEmptyCell(computerGrid, rowSelection, colSelection, rows, cols);
+
             do
             {
                 Console.Clear();
                 Console.WriteLine(text);
+                Console.ResetColor();
                 Console.WriteLine("Target tracker:");
 
                 for (int row = 0; row < rows; row++)
                 {
                     for (int col = 0; col < cols; col++)
                     {
-                        if (row == rowSelection && col== colSelection)
+                        if (row == rowSelection && col == colSelection)
                         {
                             Console.ForegroundColor = ConsoleColor.Red;
                         }
@@ -365,40 +615,89 @@ namespace Battle_Boats
                 Console.WriteLine("Your grid:");
                 DisplayCellGrid(userGrid, rows, cols);
 
+
                 key = Console.ReadKey(true).Key;
-                if (key == ConsoleKey.UpArrow && rowSelection > 0 && computerGrid[rowSelection - 1, colSelection].State == CellState.Empty) { rowSelection--; }
-                else if (key == ConsoleKey.DownArrow && rowSelection < rows - 1 && computerGrid[rowSelection + 1, colSelection].State == CellState.Empty) { rowSelection++; }
-                else if (key == ConsoleKey.LeftArrow && colSelection > 0 && computerGrid[rowSelection, colSelection - 1].State == CellState.Empty) { colSelection--; }
-                else if (key == ConsoleKey.RightArrow && colSelection < cols - 1 && computerGrid[rowSelection, colSelection + 1].State == CellState.Empty) { colSelection++; }
-            }
+                if (key == ConsoleKey.UpArrow && rowSelection > 0) { (rowSelection, colSelection) = FindNextEmptyCell(computerGrid, rowSelection, colSelection, rows, cols, -1, 0); }
+
+                else if (key == ConsoleKey.DownArrow && rowSelection < rows - 1) { (rowSelection, colSelection) = FindNextEmptyCell(computerGrid, rowSelection, colSelection, rows, cols, 1, 0); }
+               
+                else if (key == ConsoleKey.LeftArrow && colSelection > 0) { (rowSelection, colSelection) = FindNextEmptyCell(computerGrid, rowSelection, colSelection, rows, cols, 0, -1); }
+               
+                else if (key == ConsoleKey.RightArrow && colSelection < cols - 1) { (rowSelection, colSelection) = FindNextEmptyCell(computerGrid, rowSelection, colSelection, rows, cols, 0, 1); }
+               }
             while (key != ConsoleKey.Enter);
+
+            return (rowSelection, colSelection);
+        }
+
+        static (int row, int col) FindNextEmptyCell(Cell[,] grid, int rowSelection, int colSelection, int rows, int cols, int deltaRow, int deltaCol)
+        {
+            int nextRow = rowSelection + deltaRow;
+            int nextCol = colSelection + deltaCol;
+
+            while (nextRow >= 0 && nextCol >= 0 && nextRow <= rows - 1 && nextCol <= cols - 1)
+            {
+                if (grid[nextRow, nextCol].State == CellState.Empty)
+                {
+                    return (nextRow, nextCol);
+                }
+
+                nextRow += deltaRow;
+                nextCol += deltaCol;
+            }
+
+
+
+            if (nextRow < 0 || nextCol < 0 || nextRow > rows - 1 || nextCol > cols - 1)
+            {
+                nextRow = rowSelection;
+                nextCol = colSelection;
+            }
+
+            return (nextRow, nextCol);
+        }
+
+        static (int row, int col) GoToNextEmptyCell(Cell[,] grid, int rowSelection, int colSelection, int rows, int cols)
+        {
+            for (int step = 0; step < rows * cols; step++)
+            {
+                if (grid[rowSelection, colSelection].State == CellState.Empty)
+                {
+                    return (rowSelection, colSelection);
+                }
+
+                rowSelection++;
+                if (rowSelection > rows - 1)
+                {
+                    rowSelection = 0;
+                    colSelection++;
+                    if (colSelection > cols - 1)
+                    {
+                        colSelection = 0;
+                    }
+                }
+            }
 
             return (rowSelection, colSelection);
         }
 
         static char ConvertCellToChar(Cell cell)
         {
-            if (cell.Boat == BoatType.None)
+            if (cell.State == CellState.Empty)
             {
-                return '~';
+                if (cell.Boat == BoatType.None) { return '~'; }
+                else if (cell.Boat == BoatType.Destroyer) { return 'D'; }
+                else if (cell.Boat == BoatType.Submarine) { return 'S'; }
+                else if (cell.Boat == BoatType.Carrier) { return 'C'; }
             }
 
-            else if (cell.Boat == BoatType.Destroyer)
+            else
             {
-                return 'D';
+                if (cell.State == CellState.Sunk) { return '#'; }
+                else if (cell.State == CellState.Hit) { return 'H'; }
+                else if (cell.State == CellState.Miss) { return 'M'; }
             }
-
-            else if (cell.Boat == BoatType.Submarine)
-            {
-                return 'S';
-            }
-
-            else if (cell.Boat == BoatType.Carrier)
-            {
-                return 'C';
-            }
-
-            return '#';
+            return '¬'; //this should never be returned
         }
 
         static void DisplayCellGrid(Cell[,] grid, int rows, int cols)
@@ -420,7 +719,7 @@ namespace Battle_Boats
             {
                 for (int col = 0; col < cols; col++)
                 {
-                    Console.Write($"{grid[row, col].Boat} ");
+                    Console.Write($"{grid[row, col].State} ");
                 }
                 Console.WriteLine();
             }
@@ -603,59 +902,18 @@ namespace Battle_Boats
             grid[endBoatRow, endBoatCol] = new Cell { Boat = BoatType.Carrier, BoatId = computerBoatCounter++ };
         }
 
-        static void PlaceUserBoats(Cell[,] grid, int rows, int cols)
+        static void PlaceUserBoats(Cell[,] grid, int rows, int cols, string text)
         {
             int userBoatCounter = 0; //This will be the Id for the first boat
 
-            PlaceUserDestroyer(grid, rows, cols, ref userBoatCounter);
-            PlaceUserDestroyer(grid, rows, cols, ref userBoatCounter);
+            PlaceUserDestroyer(grid, rows, cols, ref userBoatCounter, text);
+            PlaceUserDestroyer(grid, rows, cols, ref userBoatCounter, text);
 
             PlaceUserSubmarine(grid, rows, cols, ref userBoatCounter);
             PlaceUserSubmarine(grid, rows, cols, ref userBoatCounter);
 
             PlaceUserCarrier(grid, rows, cols, ref userBoatCounter);
 
-        }
-
-        static (int rowSelection, int colSelection) TraverseUserGrid(Cell[,] grid, int rows, int cols, string text)
-        {
-            ConsoleKey key = ConsoleKey.None;
-            int rowSelection = 0;
-            int colSelection = 0;
-
-            do
-            {
-                Console.Clear();
-                Console.WriteLine(text);
-                for (int row = 0; row < rows; row++)
-                {
-                    for (int col = 0; col < cols; col++)
-                    {
-                        if (row == rowSelection && col == colSelection)
-                        {
-                            Console.ForegroundColor = ConsoleColor.Green;
-                        }
-
-                        else
-                        {
-                            Console.ResetColor();
-                        }
-                        Console.Write($"{ConvertCellToChar(grid[row, col])} ");
-                    }
-                    Console.WriteLine();
-                }
-
-                Console.ResetColor();
-
-                key = Console.ReadKey(true).Key;
-                if (key == ConsoleKey.UpArrow && rowSelection > 0) { rowSelection--; }
-                else if (key == ConsoleKey.DownArrow && rowSelection < rows - 1) { rowSelection++; }
-                else if (key == ConsoleKey.RightArrow && colSelection <  cols - 1) { colSelection++; }
-                else if (key == ConsoleKey.LeftArrow && colSelection > 0) { colSelection--; }
-            }
-            while (key != ConsoleKey.Enter);
-
-            return (rowSelection, colSelection);
         }
 
         static (int rowSelection, int colSelection) OverlapChecks(Cell[,] grid, int rows, int cols, bool isHorizontal, int rowSelection, int colSelection, int boatLength)
@@ -679,13 +937,11 @@ namespace Battle_Boats
             return (rowSelection, colSelection);
         }
 
-        //Come back to this, the collision detection shit doesnt work and i really want to move on rn, also i think the rotation is broken but idrk and i dont care to do anything about it rn
         static (int r1, int c1, int r2, int c2, int r3, int c3) TraverseGridToPlaceUserBoat(Cell[,] grid, int rows, int cols, string text, int boatLength)
         {
             ConsoleKey key = ConsoleKey.None;
 
             bool isHorizontal = false;
-            bool isFlipped = false;
 
             int rowSelection = 0;
             int colSelection = 0;
@@ -712,29 +968,22 @@ namespace Battle_Boats
                 row3 = rowSelection + 2;
                 col3 = colSelection;
 
-                if (isFlipped)
+                if (isHorizontal)
                 {
-                    if (!isHorizontal)
-                    {
-                        isHorizontal = true;
+                    row2 = rowSelection;
+                    col2 = colSelection + 1;
 
-                        row2 = rowSelection;
-                        col2 = colSelection + 1;
+                    row3 = rowSelection;
+                    col3 = colSelection + 2;
+                }
 
-                        row3 = rowSelection;
-                        col3 = colSelection + 2;
-                    }
+                else if (!isHorizontal)
+                {
+                    row2 = rowSelection + 1;
+                    col2 = colSelection;
 
-                    else if (isHorizontal)
-                    {
-                        isHorizontal = false;
-
-                        row2 = rowSelection + 1;
-                        col2 = colSelection;
-
-                        row3 = rowSelection + 2;
-                        col3 = colSelection;
-                    }
+                    row3 = rowSelection + 2;
+                    col3 = colSelection;
                 }
 
                 for (int row = 0; row < rows; row++)
@@ -759,7 +1008,7 @@ namespace Battle_Boats
                 else if (key == ConsoleKey.DownArrow && rowSelection < rows - 1 && (isHorizontal || rowSelection + (boatLength - 1) < rows - 1)) { rowSelection++;}
                 else if (key == ConsoleKey.RightArrow && colSelection < cols - 1 && (!isHorizontal || colSelection + (boatLength - 1) < cols - 1)) { colSelection++;}
                 else if (key == ConsoleKey.LeftArrow && colSelection > 0) { colSelection--; }
-                if (key == ConsoleKey.R && (rowSelection <= rows - boatLength && colSelection <= cols - boatLength)) { isFlipped = !isFlipped; }
+                if (key == ConsoleKey.R && (rowSelection <= rows - boatLength && colSelection <= cols - boatLength)) { isHorizontal = !isHorizontal; }
 
             }
             while (key != ConsoleKey.Enter);
@@ -767,9 +1016,11 @@ namespace Battle_Boats
             return (row1, col1, row2, col2, row3, col3);
         }
 
-        static void PlaceUserDestroyer(Cell[,] grid, int rows, int cols, ref int userBoatCounter)
+        static void PlaceUserDestroyer(Cell[,] grid, int rows, int cols, ref int userBoatCounter, string newGameText)
         {
-            string text = "Place a Destroyer: \n";
+            string newLine = string.Empty;
+            if (newGameText != string.Empty) { newLine = "\n"; }
+            string text = $"{newGameText}{newLine}Place a Destroyer: \n";
             (int r1, int c1, int r2, int c2, int r3, int c3) coordinates = TraverseGridToPlaceUserBoat(grid, rows, cols, text, 1);
 
             int row1 = coordinates.r1;
@@ -780,7 +1031,7 @@ namespace Battle_Boats
 
         static void PlaceUserSubmarine(Cell[,] grid, int rows, int cols, ref int userBoatCounter)
         {
-            string text = "Place a Submarine: \n";
+            string text = "Place a Submarine: \nPress R to rotate boat\n";
             (int r1, int c1, int r2, int c2, int r3, int c3) coordinates = TraverseGridToPlaceUserBoat(grid, rows, cols, text, 2);
 
             int row1 = coordinates.r1;
@@ -795,7 +1046,7 @@ namespace Battle_Boats
 
         static void PlaceUserCarrier(Cell[,] grid, int rows, int cols, ref int userBoatCounter)
         {
-            string text = "Place a Carrier: \n";
+            string text = "Place a Carrier: \nPress R to rotate boat\n";
             (int r1, int c1, int r2, int c2, int r3, int c3) coordinates = TraverseGridToPlaceUserBoat(grid, rows, cols, text, 3);
 
             int row1 = coordinates.r1;
@@ -813,4 +1064,4 @@ namespace Battle_Boats
         }
     }
 }
-     
+    
