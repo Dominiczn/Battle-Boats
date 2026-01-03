@@ -1,4 +1,4 @@
-Enums and structs are used to store the state of each cell on the user and computer grids, containing data about the boat type, and cell state. Lines 9 - 30
+Enums and structs are used to store the state of each cell on the user and computer grids, containing data about the boat type, and cell state. Lines 9 - 30  
 2D arrays are used to store the data of each grid - the user and computer having a grid of my struct to store their boats and the user having an aditional char 2D array, used as a target tracker. Initialised on lines 43 - 45 (Methods used to initialse them on lines 545 - 577)
 A custom menu is used to help the user select their choice without having them be able to select anything that is not wanted. Lines 728 - 758
 A switch statement is used, using the result of the menu, to select which option to use rather than using an else if chain. Lines 51 - 71
