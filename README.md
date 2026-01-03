@@ -5,6 +5,6 @@ This is a C# implementation of Battleships, created as part of a Computer Scienc
 CONTENTS:
 - [Analysis](docs/1-analysis.md)
 - [Documented Design](docs/2-documented-design.md)
-- [Technical Solution](docs/3-technical-solution.md)
+- [Technical Solution](src/Battle-Boats/Battle-Boats/Program.cs)
 - [Testing](docs/4-testing.md)
 - [Evaluation](docs/5-evaluation.md)
