@@ -1,4 +1,4 @@
-#Documented Design
+# Documented Design
 
 Enums and structs are used to store the state of each cell on the user and computer grids, containing data about the boat type, and cell state. Lines 9 - 30
 
