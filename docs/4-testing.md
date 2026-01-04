@@ -3,8 +3,8 @@
 | Test number | Test description | Test data | Expected output | Actual results |
 |------------:|------------------|-----------|------------------|----------------|
 | 1 | Menu shows all 4 options on startup | Launch program | Menu displays: NEW GAME / RESUME GAME / READ INSTRUCTIONS / QUIT | Menu displayed all four options correctly |
-| 2 | Menu highlight moves and selects correctly | Use ↑/↓ then Enter | Highlight moves up and down; Enter selects option | Highlight moved correctly and selected option on Enter |
-| 3 | New Game starts and shows boat placement on an 8×8 grid | Select **NEW GAME** | 8×8 grid displayed for placing boats | 8×8 grid shown and boat placement began |
+| 2 | Menu highlight moves and selects correctly | Use Up Arrow/ Down Arrow then Enter | Highlight moves up and down and Enter selects option | Highlight moved correctly and selected option on Enter |
+| 3 | New Game starts and shows boat placement on an 8×8 grid | Select EW GAME | 8×8 grid displayed for placing boats | 8×8 grid shown and boat placement began |
 | 4 | User can place 2 Destroyers without overlap | Place two destroyers | Two single-cell destroyers placed without overlap | Destroyers placed correctly with no overlap |
 | 5 | User can place Submarines and rotate with R | Place submarine, press R | Submarine occupies 2 cells; rotation changes orientation | Submarine placed correctly and rotation worked |
 | 6 | User can place Carrier and rotate with R | Place carrier, press R | Carrier occupies 3 cells; rotation changes orientation | Carrier placed correctly with valid rotation |
